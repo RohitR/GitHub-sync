@@ -23,9 +23,11 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_21_194035) do
     t.string "title", null: false
     t.text "body"
     t.bigint "user_id", null: false
+    t.datetime "github_updated_at", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["github_id"], name: "index_issues_on_github_id", unique: true
+    t.index ["github_updated_at"], name: "index_issues_on_github_updated_at"
     t.index ["number"], name: "index_issues_on_number", unique: true
     t.index ["user_id"], name: "index_issues_on_user_id"
   end

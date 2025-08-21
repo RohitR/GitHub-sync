@@ -11,5 +11,6 @@ FactoryBot.define do
     title { "Test Issue" }
     created_at { Time.current }
     updated_at { Time.current }
+    github_updated_at { Time.current }
   end
 end
