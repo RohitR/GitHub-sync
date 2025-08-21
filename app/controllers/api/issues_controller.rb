@@ -7,7 +7,7 @@ class Api::IssuesController < ApplicationController
     issues = fetch_issues_filtered
     set_pagination_headers(issues)
 
-    render json: issues, include: :user
+    render json: issues
   end
 
   private
