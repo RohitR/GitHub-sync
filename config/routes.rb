@@ -7,4 +7,7 @@ Rails.application.routes.draw do
 
   # Defines the root path route ("/")
   # root "posts#index"
+  namespace :api do
+    resources :issues, only: [:index], constraints: { state: /open|closed/i }
+  end
 end
