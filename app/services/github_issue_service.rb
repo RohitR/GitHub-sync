@@ -1,11 +1,19 @@
 # frozen_string_literal: true
 
-require "httparty"
+require "circuitbox"
 
 class GithubIssueService
   BASE_URL = "https://api.github.com/repos/storyblok/storyblok/issues"
   USER_AGENT = { "User-Agent" => "StoryBlokAPI" }.freeze
   PER_PAGE = 100
+
+  CIRCUITBOX_OPTIONS = {
+    exceptions: [StandardError],
+    sleep_window: 60,
+    volume_threshold: 5,
+    error_threshold: 50,
+    timeout_seconds: 10
+  }
 
   class << self
     def sync_issues(http_client: HTTParty)
@@ -14,10 +22,9 @@ class GithubIssueService
 
       loop do
         issues = fetch_issues(page, last_sync, http_client)
-        break if issues.empty?
+        break if issues.nil? || issues.empty?
 
         issues.each { |issue_data| upsert_issue_and_user(issue_data) }
-
         break if issues.size < PER_PAGE
         page += 1
       end
@@ -29,20 +36,30 @@ class GithubIssueService
       end
 
       def fetch_issues(page, last_sync, http_client)
-        params = {
-          state: "all",
-          sort: "updated",
-          direction: "asc",
-          per_page: PER_PAGE,
-          page:
-        }
-        params[:since] = last_sync.utc.iso8601 if last_sync
+        breaker = Circuitbox.circuit(:github_api, CIRCUITBOX_OPTIONS)
 
-        response = http_client.get(BASE_URL, query: params, headers: USER_AGENT)
+        Rails.logger.info("Circuit is currently #{breaker.open? ? 'OPEN' : 'CLOSED'}")
 
-        raise response.body unless response.success?
+        breaker.run do
+          params = {
+            state: "all",
+            sort: "updated",
+            direction: "asc",
+            per_page: PER_PAGE,
+            page:
+          }
+          params[:since] = last_sync.utc.iso8601 if last_sync
 
-        JSON.parse(response.body)
+          response = http_client.get(BASE_URL, query: params, headers: USER_AGENT,
+  timeout: CIRCUITBOX_OPTIONS[:timeout_seconds])
+
+          raise response.body unless response.success?
+
+          JSON.parse(response.body)
+        end
+      rescue Circuitbox::Error => e
+        Rails.logger.error("GitHub API circuit open or error: #{e.message}")
+        [] # Return empty array when circuit is open or fails
       rescue StandardError => e
         Rails.logger.error("Failed to fetch GitHub issues (page #{page}): #{e.message}")
         []
