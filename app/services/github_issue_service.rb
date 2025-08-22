@@ -16,21 +16,56 @@ class GithubIssueService
   }
 
   class << self
-    def sync_issues(http_client: HTTParty)
+    def sync_issues(http_client: HTTParty, batch_size: 500)
       last_sync = last_github_update_time
       page = 1
+
+      batch = []
 
       loop do
         issues = fetch_issues(page, last_sync, http_client)
         break if issues.nil? || issues.empty?
 
-        issues.each { |issue_data| upsert_issue_and_user(issue_data) }
+        issues.each do |issue_data|
+          # https://docs.github.com/en/rest/issues/issues?apiVersion=2022-11-28
+          next if issue_data.key?("pull_request")
+
+          batch << prepare_issue_attributes(issue_data)
+
+          if batch.size >= batch_size
+            bulk_upsert_issues(batch)
+            batch.clear
+          end
+        end
+
+        bulk_upsert_issues(batch) if batch.any?
+        batch.clear
+
         break if issues.size < PER_PAGE
         page += 1
       end
     end
 
     private
+      def prepare_issue_attributes(issue_data)
+        user = find_or_create_user(issue_data["user"])
+        {
+          github_id: issue_data["id"],
+          number: issue_data["number"],
+          state: issue_data["state"],
+          title: issue_data["title"],
+          body: issue_data["body"],
+          created_at: issue_data["created_at"],
+          updated_at: issue_data["updated_at"],
+          github_updated_at: issue_data["updated_at"],
+          user_id: user.id
+        }
+      end
+
+      def bulk_upsert_issues(issue_attrs_array)
+        Issue.upsert_all(issue_attrs_array, unique_by: :github_id)
+      end
+
       def last_github_update_time
         Issue.maximum(:github_updated_at)
       end
@@ -63,27 +98,6 @@ class GithubIssueService
       rescue StandardError => e
         Rails.logger.error("Failed to fetch GitHub issues (page #{page}): #{e.message}")
         []
-      end
-
-      def upsert_issue_and_user(issue_data)
-        # https://docs.github.com/en/rest/issues/issues?apiVersion=2022-11-28
-        return if issue_data.key?("pull_request")
-
-        user = find_or_create_user(issue_data["user"])
-        Issue.upsert(
-          {
-            github_id: issue_data["id"],
-            number: issue_data["number"],
-            state: issue_data["state"],
-            title: issue_data["title"],
-            body: issue_data["body"],
-            created_at: issue_data["created_at"],
-            updated_at: issue_data["updated_at"],
-            github_updated_at: issue_data["updated_at"],
-            user_id: user.id
-          },
-          unique_by: :github_id
-        )
       end
 
       def find_or_create_user(user_data)
