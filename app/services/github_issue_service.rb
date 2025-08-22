@@ -49,6 +49,9 @@ class GithubIssueService
       end
 
       def upsert_issue_and_user(issue_data)
+        # https://docs.github.com/en/rest/issues/issues?apiVersion=2022-11-28
+        return if issue_data.key?("pull_request")
+
         user = find_or_create_user(issue_data["user"])
         Issue.upsert(
           {
