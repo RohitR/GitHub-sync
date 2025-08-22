@@ -42,15 +42,29 @@ RSpec.describe GithubIssueService, type: :service do
 
     expect(http_client).to receive(:get).with(
       GithubIssueService::BASE_URL,
-      query: hash_including(page: 1),
-      headers: GithubIssueService::USER_AGENT
+      hash_including(
+        headers: GithubIssueService::USER_AGENT,
+        query: hash_including(
+          page: 1,
+          state: "all",
+          sort: "updated",
+          direction: "asc",
+          per_page: GithubIssueService::PER_PAGE
+        ),
+        timeout: GithubIssueService::CIRCUITBOX_OPTIONS[:timeout_seconds]
+      )
     ).and_return(first_page_response)
+
 
     expect(http_client).to receive(:get).with(
       GithubIssueService::BASE_URL,
-      query: hash_including(page: 2),
-      headers: GithubIssueService::USER_AGENT
+      hash_including(
+        headers: GithubIssueService::USER_AGENT,
+        query: hash_including(page: 2),
+        timeout: GithubIssueService::CIRCUITBOX_OPTIONS[:timeout_seconds]
+      )
     ).and_return(second_page_response)
+
 
     expect {
       GithubIssueService.sync_issues(http_client:)
@@ -71,7 +85,7 @@ RSpec.describe GithubIssueService, type: :service do
     failed_response = instance_double(HTTParty::Response, success?: false, body: "error", code: 500)
     allow(http_client).to receive(:get).and_return(failed_response)
 
-    expect(Rails.logger).to receive(:error).with(/Failed to fetch GitHub issues/).at_least(:once)
+    expect(Rails.logger).to receive(:error).with(/GitHub API circuit open or error/).at_least(:once)
 
     expect {
       GithubIssueService.sync_issues(http_client:)

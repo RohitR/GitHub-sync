@@ -22,8 +22,8 @@ module Api
 
         def fetch_issues_filtered
           issues = Issue.all.includes(:user)
-          if params[:state].present?
-            state = params[:state].to_s.downcase
+          if issue_params[:state].present?
+            state = issue_params[:state].to_s.downcase
             issues = issues.by_state(state) if %w[open closed].include?(state)
           end
           issues
@@ -31,6 +31,10 @@ module Api
 
         def set_pagination_headers(issues_relation)
           response.headers["X-Total-Count"] = issues_relation.count.to_s
+        end
+
+        def issue_params
+          params.permit(:state)
         end
     end
   end
