@@ -6,7 +6,7 @@ module Api
       def index
         trigger_github_sync_if_needed
 
-        issues = fetch_issues_filtered
+        issues = fetch_issues_filtered.order(created_at: :desc).page(page).per(per_page)
         set_pagination_headers(issues)
 
         render json: issues
@@ -29,12 +29,22 @@ module Api
           issues
         end
 
-        def set_pagination_headers(issues_relation)
-          response.headers["X-Total-Count"] = issues_relation.count.to_s
+        def set_pagination_headers(paginated_issues)
+          response.headers["X-Total-Count"] = paginated_issues.total_count.to_s
         end
 
         def issue_params
-          params.permit(:state)
+          params.permit(:state, :page, :per_page)
+        end
+
+        def page
+          issue_params[:page].present? ? issue_params[:page].to_i : 1
+        end
+
+        def per_page
+          max_per_page = 100
+          requested = issue_params[:per_page].to_i
+          requested > 0 ? [requested, max_per_page].min : 20
         end
     end
   end
