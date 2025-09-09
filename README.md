@@ -1,6 +1,6 @@
 # GitHub Issues Sync Service
 
-This Rails service fetches issues from the [Storyblok GitHub repository](https://github.com/storyblok/storyblok/issues) and stores them in the local database for querying via API.
+This Rails service fetches issues from a GitHub repository and stores them in the local database for querying via API.
 
 ## Features
 
